@@ -99,6 +99,8 @@ std::expected<void, OutputError> DrmCommit::errnoToError()
     }
 }
 
+static const qsizetype s_maxDamageClips = 64;
+
 DrmAtomicCommit::DrmAtomicCommit(DrmGpu *gpu, const QList<DrmPipeline *> &pipelines)
     : DrmCommit(gpu)
     , m_pipelines(pipelines)
@@ -137,6 +139,38 @@ void DrmAtomicCommit::addBuffer(DrmPlane *plane, const std::shared_ptr<DrmFrameb
             m_targetPageflipTime = frame->targetPageflipTime();
         }
     }
+}
+
+void DrmAtomicCommit::addDamage(DrmPlane *plane, const std::optional<Region> &damage, uint64_t frameSerial)
+{
+    m_frameSerials[plane] = frameSerial;
+    const auto buffer = m_buffers[plane];
+    if (!damage || !buffer) {
+        // no clips means that everything is damaged
+        addBlob(plane->fbDamage, nullptr);
+        return;
+    }
+    const Region clipped = *damage & Rect(QPoint(), buffer->buffer()->size());
+    std::vector<drm_mode_rect> clips;
+    const auto addClip = [&clips](const Rect &rect) {
+        clips.push_back(drm_mode_rect{
+            .x1 = rect.left(),
+            .y1 = rect.top(),
+            .x2 = rect.left() + rect.width(),
+            .y2 = rect.top() + rect.height(),
+        });
+    };
+    if (clipped.isEmpty()) {
+        // there's no way to say "nothing"; one pixel is the closest to it
+        addClip(Rect(0, 0, 1, 1));
+    } else if (clipped.rects().size() > s_maxDamageClips) {
+        addClip(clipped.boundingRect());
+    } else {
+        for (const Rect &rect : clipped.rects()) {
+            addClip(rect);
+        }
+    }
+    addBlob(plane->fbDamage, DrmBlob::create(m_gpu, clips.data(), clips.size() * sizeof(drm_mode_rect)));
 }
 
 void DrmAtomicCommit::setVrr(DrmCrtc *crtc, bool vrr)
@@ -227,6 +261,9 @@ void DrmAtomicCommit::pageFlipped(std::chrono::nanoseconds timestamp)
     for (const auto &[plane, buffer] : m_buffers) {
         plane->setCurrentBuffer(buffer);
     }
+    for (const auto &[plane, serial] : m_frameSerials) {
+        plane->setPresentedFrameSerial(serial);
+    }
     if (m_defunct) {
         return;
     }
@@ -292,6 +329,11 @@ void DrmAtomicCommit::merge(DrmAtomicCommit *onTop)
     }
     for (const auto &[prop, blob] : onTop->m_blobs) {
         m_blobs[prop] = blob;
+    }
+    // the damage of a later frame includes that of the earlier ones that
+    // weren't presented yet, so there's nothing to add up here
+    for (const auto &[plane, serial] : onTop->m_frameSerials) {
+        m_frameSerials[plane] = serial;
     }
     if (onTop->m_vrr) {
         m_vrr = onTop->m_vrr;

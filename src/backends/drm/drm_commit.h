@@ -18,6 +18,7 @@
 #include <unordered_set>
 
 #include "core/backendoutput.h"
+#include "core/region.h"
 #include "core/renderloop.h"
 #include "drm_pointer.h"
 #include "drm_property.h"
@@ -76,6 +77,12 @@ public:
     }
     void addBlob(const DrmProperty &prop, const std::shared_ptr<DrmBlob> &blob);
     void addBuffer(DrmPlane *plane, const std::shared_ptr<DrmFramebuffer> &buffer, const std::shared_ptr<OutputFrame> &frame);
+    /**
+     * Sets FB_DAMAGE_CLIPS for the buffer of @p plane. @p damage is what differs from the
+     * frame that's on the screen, in buffer coordinates, std::nullopt for everything.
+     * @p frameSerial is reported to the plane once the buffer is on the screen
+     */
+    void addDamage(DrmPlane *plane, const std::optional<Region> &damage, uint64_t frameSerial);
     void setVrr(DrmCrtc *crtc, bool vrr);
     void setPresentationMode(PresentationMode mode);
 
@@ -115,6 +122,7 @@ private:
     std::unordered_map<const DrmProperty *, std::shared_ptr<DrmBlob>> m_blobs;
     std::unordered_map<DrmPlane *, std::shared_ptr<DrmFramebuffer>> m_buffers;
     std::unordered_map<DrmPlane *, std::shared_ptr<OutputFrame>> m_frames;
+    std::unordered_map<DrmPlane *, uint64_t> m_frameSerials;
     std::unordered_set<DrmPlane *> m_planes;
     std::optional<bool> m_vrr;
     std::unordered_map<uint32_t /* object */, std::unordered_map<uint32_t /* property */, uint64_t /* value */>> m_properties;

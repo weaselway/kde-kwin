@@ -292,7 +292,7 @@ std::expected<void, OutputError> DrmPipeline::prepareAtomicPlane(DrmAtomicCommit
         commit->addProperty(plane->zpos, layer->zpos());
     }
     if (plane->fbDamage.isValid()) {
-        commit->addProperty(plane->fbDamage, 0);
+        commit->addDamage(plane, layer->bufferDamage(), layer->frameSerial());
     }
 
     const auto colorPipelines = plane->colorPipelines();
