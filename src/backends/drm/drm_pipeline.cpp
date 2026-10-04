@@ -268,6 +268,9 @@ DrmPipeline::Error DrmPipeline::prepareAtomicPlane(DrmAtomicCommit *commit, DrmP
     if (plane->zpos.isValid() && !plane->zpos.isImmutable()) {
         commit->addProperty(plane->zpos, layer->zpos());
     }
+    if (plane->fbDamage.isValid()) {
+        commit->addDamage(plane, layer->bufferDamage(), layer->frameSerial());
+    }
 
     const auto colorPipelines = plane->colorPipelines();
     if (layer->colorPipeline().isIdentity()) {

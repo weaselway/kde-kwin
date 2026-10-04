@@ -68,6 +68,7 @@ DrmPlane::DrmPlane(DrmGpu *gpu, uint32_t planeId)
                                                          })
     , vmHotspotX(this, QByteArrayLiteral("HOTSPOT_X"))
     , vmHotspotY(this, QByteArrayLiteral("HOTSPOT_Y"))
+    , fbDamage(this, QByteArrayLiteral("FB_DAMAGE_CLIPS"))
     , inFenceFd(this, QByteArrayLiteral("IN_FENCE_FD"))
     , sizeHints(this, QByteArrayLiteral("SIZE_HINTS"))
     , inFormatsForTearing(this, QByteArrayLiteral("IN_FORMATS_ASYNC"))
@@ -108,6 +109,7 @@ bool DrmPlane::updateProperties()
     colorRange.update(props);
     vmHotspotX.update(props);
     vmHotspotY.update(props);
+    fbDamage.update(props);
     inFenceFd.update(props);
     sizeHints.update(props);
     inFormatsForTearing.update(props);
@@ -238,6 +240,16 @@ QHash<uint32_t, QList<uint64_t>> DrmPlane::tearingFormats() const
 std::shared_ptr<DrmFramebuffer> DrmPlane::currentBuffer() const
 {
     return m_current;
+}
+
+uint64_t DrmPlane::presentedFrameSerial() const
+{
+    return m_presentedFrameSerial;
+}
+
+void DrmPlane::setPresentedFrameSerial(uint64_t serial)
+{
+    m_presentedFrameSerial = std::max(m_presentedFrameSerial, serial);
 }
 
 void DrmPlane::setCurrentBuffer(const std::shared_ptr<DrmFramebuffer> &b)

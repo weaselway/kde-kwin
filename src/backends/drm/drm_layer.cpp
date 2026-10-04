@@ -99,6 +99,49 @@ DrmPlane *DrmPipelineLayer::plane() const
     return m_plane;
 }
 
+static const size_t s_maxFrameDamage = 16;
+
+uint64_t DrmPipelineLayer::frameSerial() const
+{
+    return m_frameSerial;
+}
+
+std::optional<Region> DrmPipelineLayer::bufferDamage() const
+{
+    if (!m_plane) {
+        return std::nullopt;
+    }
+    Region ret;
+    for (const auto &frame : m_frameDamage) {
+        if (frame.serial <= m_plane->presentedFrameSerial()) {
+            continue;
+        }
+        if (!frame.damage) {
+            return std::nullopt;
+        }
+        ret |= *frame.damage;
+    }
+    return ret;
+}
+
+void DrmPipelineLayer::addFrameDamage(const std::optional<Region> &damage)
+{
+    if (!m_plane) {
+        return;
+    }
+    while (!m_frameDamage.empty() && m_frameDamage.front().serial <= m_plane->presentedFrameSerial()) {
+        m_frameDamage.pop_front();
+    }
+    m_frameSerial++;
+    if (m_frameDamage.size() >= s_maxFrameDamage) {
+        // nothing gets presented, don't collect damage forever
+        m_frameDamage.clear();
+        m_frameDamage.push_back(FrameDamage{.serial = m_frameSerial, .damage = std::nullopt});
+    } else {
+        m_frameDamage.push_back(FrameDamage{.serial = m_frameSerial, .damage = damage});
+    }
+}
+
 DrmPipeline *DrmPipelineLayer::pipeline() const
 {
     return drmOutput()->pipeline();

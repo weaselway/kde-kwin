@@ -47,6 +47,13 @@ public:
     void setCurrentBuffer(const std::shared_ptr<DrmFramebuffer> &b);
     void releaseCurrentBuffer();
 
+    /**
+     * The serial of the last frame of this plane's layer that reached the
+     * screen, see DrmPipelineLayer::frameSerial()
+     */
+    uint64_t presentedFrameSerial() const;
+    void setPresentedFrameSerial(uint64_t serial);
+
     void set(DrmAtomicCommit *commit, const Rect &src, const Rect &dst);
 
     QList<QSize> recommendedSizes() const;
@@ -102,6 +109,7 @@ public:
     DrmEnumProperty<ColorRange> colorRange;
     DrmProperty vmHotspotX;
     DrmProperty vmHotspotY;
+    DrmProperty fbDamage;
     DrmProperty inFenceFd;
     DrmProperty sizeHints;
     DrmProperty inFormatsForTearing;
@@ -110,6 +118,7 @@ public:
 
 private:
     std::shared_ptr<DrmFramebuffer> m_current;
+    uint64_t m_presentedFrameSerial = 0;
     QList<std::shared_ptr<DrmFramebufferData>> m_lastBuffers;
 
     QHash<uint32_t, QList<uint64_t>> m_supportedFormats;
