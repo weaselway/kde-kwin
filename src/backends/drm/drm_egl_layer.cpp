@@ -69,7 +69,16 @@ std::optional<OutputLayerBeginFrameInfo> EglGbmLayer::doBeginFrame()
 
 bool EglGbmLayer::doEndFrame(const Region &renderedDeviceRegion, const Region &damagedDeviceRegion, OutputFrame *frame)
 {
-    return m_surface.endRendering(damagedDeviceRegion, frame);
+    if (!m_surface.endRendering(damagedDeviceRegion, frame)) {
+        return false;
+    }
+    if (drmOutput()->transform() == OutputTransform::Normal) {
+        addFrameDamage(damagedDeviceRegion);
+    } else {
+        // TODO map the damage to the rotated buffer
+        addFrameDamage(std::nullopt);
+    }
+    return true;
 }
 
 bool EglGbmLayer::preparePresentationTest()
@@ -77,8 +86,14 @@ bool EglGbmLayer::preparePresentationTest()
     if (m_type != OutputLayerType::Primary && drmOutput()->shouldDisableNonPrimaryPlanes()) {
         return false;
     }
+    const auto previousBuffer = currentBuffer();
     m_scanoutBuffer.reset();
-    return m_surface.renderTestBuffer(targetRect().size(), supportedDrmFormats(), drmOutput()->nextState().colorPowerTradeoff, m_requiredAlphaBits) != nullptr;
+    const bool ret = m_surface.renderTestBuffer(targetRect().size(), supportedDrmFormats(), drmOutput()->nextState().colorPowerTradeoff, m_requiredAlphaBits) != nullptr;
+    if (currentBuffer() != previousBuffer) {
+        // a test buffer, or the last rendered one instead of a client's
+        addFrameDamage(std::nullopt);
+    }
+    return ret;
 }
 
 static const auto s_allowHardwareRotation = environmentVariableBoolValue("KWIN_ENABLE_HW_ROTATION");
@@ -146,6 +161,7 @@ bool EglGbmLayer::importScanoutBuffer(GraphicsBuffer *buffer, const std::shared_
     }
     m_scanoutBuffer = gpu()->importBuffer(buffer, FileDescriptor{});
     if (m_scanoutBuffer) {
+        addFrameDamage(std::nullopt);
         m_surface.forgetDamage(); // TODO: Use absolute frame sequence numbers for indexing the DamageJournal. It's more flexible and less error-prone
     }
     return m_scanoutBuffer != nullptr;
@@ -159,6 +175,7 @@ std::shared_ptr<DrmFramebuffer> EglGbmLayer::currentBuffer() const
 void EglGbmLayer::releaseBuffers()
 {
     m_scanoutBuffer.reset();
+    addFrameDamage(std::nullopt);
     m_surface.destroyResources();
 }
 

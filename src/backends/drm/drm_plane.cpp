@@ -242,6 +242,16 @@ std::shared_ptr<DrmFramebuffer> DrmPlane::currentBuffer() const
     return m_current;
 }
 
+uint64_t DrmPlane::presentedFrameSerial() const
+{
+    return m_presentedFrameSerial;
+}
+
+void DrmPlane::setPresentedFrameSerial(uint64_t serial)
+{
+    m_presentedFrameSerial = std::max(m_presentedFrameSerial, serial);
+}
+
 void DrmPlane::setCurrentBuffer(const std::shared_ptr<DrmFramebuffer> &b)
 {
     if (m_current == b) {
